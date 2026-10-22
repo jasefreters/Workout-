@@ -1,9 +1,9 @@
 # Garage Gym
 
-A simple workout tracker for the home gym (Smith machine + cable functional trainer, adjustable bench, pull-up bar).
+A simple workout tracker for the home gym (cable functional trainer with two weight stacks, adjustable bench, pull-up bar, dip bars, Smith bar). There are no plates, so all the loaded exercises are on the cables.
 
 - **4 training days:** Chest & Triceps, Back & Biceps, Shoulders/Legs/Glutes, Full Body + Abs
-- Each day lists 10–12 exercises. The first 5 are ticked by default, and you choose what to do today.
+- Each day lists 12–13 exercises. The first 5 are ticked by default, and you choose what to do today.
 - Log weight and reps for each set. It shows what you lifted last time and your best, and tells you when to go up a weight.
 - The **Progress** tab charts each exercise over time. **History** lists every workout.
 - Supports more than one person (use the name picker in the top right).

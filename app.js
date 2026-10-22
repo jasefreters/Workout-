@@ -52,7 +52,9 @@ function suggestion(ex) {
   if (!last) return null;
   const top = topSet(last.sets);
   if (last.sets.every((s) => s.reps >= ex.reps[1]) && last.sets.length >= 2) {
-    return { kg: round(top.kg + TYPE_INFO[ex.type].step), text: "Hit all reps last time — go up" };
+    if (ex.type === "bw") return { kg: top.kg, text: "Hit all reps last time — add reps or slow the lowering" };
+    const kg = round(top.kg + TYPE_INFO[ex.type].step);
+    return { kg, text: `Hit all reps last time — go up to ${kgLabel(ex, kg)}` };
   }
   return null;
 }
@@ -79,7 +81,7 @@ function lastLine(ex) {
   const sug = suggestion(ex);
   return `<div class="last">Last (${fmtDate(last.date)}): <b>${esc(setsText(ex, last.sets))}</b>
     · Best: <b>${esc(kgLabel(ex, best.kg))} × ${best.reps}</b>
-    ${sug ? `<br><span class="up">↑ ${sug.text} to ${kgLabel(ex, sug.kg)}</span>` : ""}</div>`;
+    ${sug ? `<br><span class="up">↑ ${esc(sug.text)}</span>` : ""}</div>`;
 }
 
 // ---------- views ----------
