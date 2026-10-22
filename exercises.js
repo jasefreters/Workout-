@@ -55,6 +55,8 @@ const DAYS = [
         setup: "Multi-grip bar on top. Too hard? Do slow 5-second lowerings." },
       { id: "cable-curl", name: "Cable Bicep Curl", type: "cable", reps: [10, 15], sets: 3,
         setup: "Pulley at the bottom, straight bar. Elbows stay at your sides." },
+      { id: "preacher-curl", name: "Cable Preacher Curl", type: "cable", reps: [10, 15], sets: 3,
+        setup: "Bench on a steep incline facing the stack, kneel behind it with arms over the backrest (your preacher pad). Pulley at the bottom, straight bar or D-handle." },
       { id: "rope-hammer", name: "Rope Hammer Curl", type: "cable", reps: [10, 15], sets: 3,
         setup: "Pulley at the bottom, rope. Thumbs up the whole way." },
       { id: "inverted-row", name: "Smith Inverted Row", type: "bw", reps: [8, 15], sets: 3,
