@@ -146,4 +146,5 @@ const DAYS = [
 const TYPE_INFO = {
   cable: { label: "Cable stack", step: 4.5, unit: "kg" },
   bw:    { label: "Bodyweight", step: 2.5, unit: "+kg" },
+  other: { label: "Other weights", step: 1, unit: "kg" },
 };

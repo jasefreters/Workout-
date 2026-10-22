@@ -9,15 +9,19 @@ const personSelect = document.getElementById("person");
 const EXERCISES = {};
 DAYS.forEach((d) => d.exercises.forEach((ex) => { EXERCISES[ex.id] = { ...ex, dayId: d.id }; }));
 
+// Built-in exercise or one the user added themselves.
+const getEx = (id) => EXERCISES[id] || state.custom.find((c) => c.id === id);
+const dayExercises = (dayId) => dayById(dayId).exercises.concat(state.custom.filter((c) => c.dayId === dayId));
+
 // Exercises repeated on Day 4 share history with the original.
-const keyOf = (exId) => (EXERCISES[exId] && EXERCISES[exId].sameAs) || exId;
+const keyOf = (exId) => (getEx(exId) && getEx(exId).sameAs) || exId;
 
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (s && Array.isArray(s.people)) return s;
+    if (s && Array.isArray(s.people)) return { custom: [], ...s };
   } catch (e) { /* fall through */ }
-  return { people: ["Me"], person: "Me", sessions: [], picks: {}, active: null };
+  return { people: ["Me"], person: "Me", sessions: [], picks: {}, active: null, custom: [] };
 }
 let state = load();
 function save() {
@@ -101,7 +105,7 @@ function viewHome() {
       <a class="card day-card" href="#/day/${d.id}">
         <div class="day">${d.name}</div>
         <div class="title">${d.title}</div>
-        <div class="muted small">${d.exercises.length} exercises to choose from
+        <div class="muted small">${dayExercises(d.id).length} exercises to choose from
           · ${lastByDay[d.id] ? "last done " + fmtDate(lastByDay[d.id]) : "not done yet"}</div>
       </a>`).join("")}
     <h2>Backup</h2>
@@ -118,7 +122,7 @@ const dayById = (id) => DAYS.find((d) => d.id === id);
 
 function picksFor(dayId) {
   const k = state.person + "|" + dayId;
-  if (!state.picks[k]) state.picks[k] = dayById(dayId).exercises.slice(0, 5).map((e) => e.id);
+  if (!state.picks[k]) state.picks[k] = dayExercises(dayId).slice(0, 5).map((e) => e.id);
   return state.picks[k];
 }
 
@@ -130,15 +134,19 @@ function viewDay(dayId) {
     <a href="#/" class="muted small">← Back</a>
     <h1>${day.title}</h1>
     <p class="sub">Tick the exercises you want to do today (5 is a good number).</p>
-    ${day.exercises.map((ex) => `
-      <label class="card pick ${picks.includes(ex.id) ? "on" : ""}">
-        <input type="checkbox" data-action="pick" data-day="${dayId}" data-ex="${ex.id}" ${picks.includes(ex.id) ? "checked" : ""}>
-        <div class="grow">
-          <div class="name">${esc(ex.name)}</div>
-          <div><span class="tag">${TYPE_INFO[ex.type].label}</span><span class="tag">${ex.sets} × ${ex.reps[0]}–${ex.reps[1]}</span></div>
-          ${lastLine(ex)}
-        </div>
-      </label>`).join("")}
+    ${dayExercises(dayId).map((ex) => `
+      <div class="card pick ${picks.includes(ex.id) ? "on" : ""}">
+        <label class="pick-main">
+          <input type="checkbox" data-action="pick" data-day="${dayId}" data-ex="${ex.id}" ${picks.includes(ex.id) ? "checked" : ""}>
+          <div class="grow">
+            <div class="name">${esc(ex.name)}</div>
+            <div><span class="tag">${TYPE_INFO[ex.type].label}</span><span class="tag">${ex.sets} × ${ex.reps[0]}–${ex.reps[1]}</span>${ex.custom ? `<span class="tag">Your own</span>` : ""}</div>
+            ${lastLine(ex)}
+          </div>
+        </label>
+        ${infoBtn(ex)}
+      </div>`).join("")}
+    <button class="btn block dashed" data-action="custom-new" data-day="${dayId}">+ Add your own exercise</button>
     <div class="sticky-foot"><div>
       <button class="btn primary block" data-action="start" data-day="${dayId}" ${picks.length ? "" : "disabled"}>
         Start workout (${picks.length} exercise${picks.length === 1 ? "" : "s"})
@@ -147,9 +155,8 @@ function viewDay(dayId) {
 
 function startWorkout(dayId) {
   if (state.active && state.active.person === state.person && !confirm("You have a workout in progress. Replace it?")) return;
-  const day = dayById(dayId);
   const picks = picksFor(dayId);
-  const entries = day.exercises.filter((ex) => picks.includes(ex.id)).map((ex) => {
+  const entries = dayExercises(dayId).filter((ex) => picks.includes(ex.id)).map((ex) => {
     const last = lastFor(keyOf(ex.id));
     const sug = suggestion(ex);
     let sets;
@@ -181,11 +188,12 @@ function viewWorkout() {
       <button class="btn small ghost" data-action="cancel">Discard</button>
     </div>
     ${w.entries.map((e, ei) => {
-      const ex = EXERCISES[e.exId];
+      const ex = getEx(e.exId);
+      if (!ex) return "";
       const unit = TYPE_INFO[ex.type].unit;
       return `
       <div class="card">
-        <div class="ex-head"><div class="name">${esc(ex.name)}</div><span class="tag">${ex.reps[0]}–${ex.reps[1]} reps</span></div>
+        <div class="ex-head"><div class="name">${esc(ex.name)}</div><div class="row"><span class="tag">${ex.reps[0]}–${ex.reps[1]} reps</span>${infoBtn(ex)}</div></div>
         <div class="setup">${esc(ex.setup)}</div>
         ${lastLine(ex)}
         <table class="sets" style="margin-top:8px">
@@ -216,7 +224,8 @@ function viewWorkout() {
 function finishWorkout() {
   const w = state.active;
   const entries = w.entries
-    .map((e) => ({ exId: e.exId, sets: e.sets.filter((s) => s.done && Number(s.reps) > 0).map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps) })) }))
+    .filter((e) => getEx(e.exId))
+    .map((e) => ({ exId: e.exId, name: getEx(e.exId).name, sets: e.sets.filter((s) => s.done && Number(s.reps) > 0).map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps) })) }))
     .filter((e) => e.sets.length);
   if (!entries.length) {
     alert("Tick ✓ next to the sets you've done (with reps filled in) before saving.");
@@ -232,7 +241,7 @@ function viewProgress(query) {
   const done = new Set();
   mySessions().forEach((s) => s.entries.forEach((e) => done.add(keyOf(e.exId))));
   const q = (query || "").toLowerCase();
-  const items = DAYS.flatMap((d) => d.exercises.filter((ex) => !ex.sameAs).map((ex) => ({ ex, day: d })))
+  const items = DAYS.flatMap((d) => dayExercises(d.id).filter((ex) => !ex.sameAs).map((ex) => ({ ex, day: d })))
     .filter(({ ex }) => !q || ex.name.toLowerCase().includes(q));
   const tried = items.filter(({ ex }) => done.has(ex.id));
   const notYet = items.filter(({ ex }) => !done.has(ex.id));
@@ -251,7 +260,7 @@ function viewProgress(query) {
 }
 
 function viewExercise(exId) {
-  const ex = EXERCISES[exId];
+  const ex = getEx(exId);
   if (!ex) return viewProgress();
   const hist = historyFor(keyOf(exId));
   const best = bestEver(keyOf(exId));
@@ -260,7 +269,7 @@ function viewExercise(exId) {
   return `
     <a href="#/progress" class="muted small">← Progress</a>
     <h1>${esc(ex.name)}</h1>
-    <p class="sub">${esc(ex.setup)}</p>
+    <p class="sub">${esc(ex.setup)} ${infoBtn(ex, "How to")}</p>
     ${hist.length ? `
       <div class="stats">
         <div class="stat"><div class="v">${esc(kgLabel(ex, best.kg))}</div><div class="k">Best (×${best.reps})</div></div>
@@ -300,8 +309,93 @@ function viewHistory() {
       <div class="card">
         <div class="ex-head"><div><div class="name">${dayById(s.dayId).title}</div><div class="muted small">${fmtDate(s.date)}</div></div>
           <button class="del" data-action="delsession" data-id="${s.id}" aria-label="Delete workout">🗑</button></div>
-        ${s.entries.map((e) => { const ex = EXERCISES[e.exId]; return `<div class="list-item"><span>${esc(ex ? ex.name : e.exId)}</span><span class="muted">${ex ? esc(setsText(ex, e.sets)) : ""}</span></div>`; }).join("")}
+        ${s.entries.map((e) => { const ex = getEx(e.exId); return `<div class="list-item"><span>${esc(ex ? ex.name : e.name || e.exId)}</span><span class="muted">${ex ? esc(setsText(ex, e.sets)) : ""}</span></div>`; }).join("")}
       </div>`).join("")}`;
+}
+
+// ---------- info sheet & custom exercises ----------
+
+const sheet = document.getElementById("sheet");
+const infoBtn = (ex, label) => `<button class="info-btn${label ? " labelled" : ""}" data-action="info" data-ex="${ex.id}" aria-label="How to do ${esc(ex.name)}">${label ? esc(label) + " " : ""}<span>i</span></button>`;
+
+function openSheet(html) {
+  sheet.innerHTML = `<div class="sheet-backdrop" data-action="close"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true">
+      <button class="sheet-close" data-action="close" aria-label="Close">✕</button>${html}</div>`;
+  sheet.hidden = false;
+  document.body.classList.add("noscroll");
+}
+function closeSheet() {
+  sheet.hidden = true;
+  sheet.innerHTML = "";
+  document.body.classList.remove("noscroll");
+}
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !sheet.hidden) closeSheet(); });
+
+function openInfo(exId) {
+  const ex = getEx(exId);
+  if (!ex) return;
+  const g = GUIDE[keyOf(exId)] || GENERIC_GUIDE;
+  openSheet(`
+    <h2 class="sheet-title">${esc(ex.name)}</h2>
+    <div><span class="tag">${TYPE_INFO[ex.type].label}</span><span class="tag">${ex.sets} sets × ${ex.reps[0]}–${ex.reps[1]} reps</span></div>
+    ${ex.custom ? "" : `<div class="art-wrap">${renderArt(g.art)}<div class="muted small">Start ⇄ finish position</div></div>`}
+    ${g.muscles ? `<h3>Works</h3><p>${esc(g.muscles)}</p>` : ""}
+    ${ex.setup ? `<h3>Setup</h3><p>${esc(ex.setup)}</p>` : ""}
+    ${g.steps.length ? `<h3>How to do it</h3><ol>${g.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
+    ${g.tips.length ? `<h3>Tips</h3><ul>${g.tips.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}
+    ${ex.custom ? `<div class="row" style="margin-top:16px">
+        <button class="btn grow" data-action="custom-edit" data-ex="${ex.id}">Edit</button>
+        <button class="btn grow" data-action="custom-delete" data-ex="${ex.id}">Delete</button></div>` : ""}`);
+}
+
+function openCustomForm(dayId, editId) {
+  const ex = editId ? getEx(editId) : { dayId, name: "", type: "cable", sets: 3, reps: [8, 12], setup: "" };
+  openSheet(`
+    <h2 class="sheet-title">${editId ? "Edit exercise" : "Add your own exercise"}</h2>
+    <form class="form" onsubmit="return false">
+      <input type="hidden" name="id" value="${editId || ""}">
+      <label>Name<input name="name" required maxlength="60" value="${esc(ex.name)}" placeholder="e.g. Smith Machine Squat"></label>
+      <label>Day<select name="dayId">${DAYS.map((d) => `<option value="${d.id}" ${d.id === ex.dayId ? "selected" : ""}>${d.name} – ${d.title}</option>`).join("")}</select></label>
+      <label>Type<select name="type">${Object.entries(TYPE_INFO).map(([k, v]) => `<option value="${k}" ${k === ex.type ? "selected" : ""}>${v.label}</option>`).join("")}</select></label>
+      <div class="row">
+        <label class="grow">Sets<input name="sets" type="number" inputmode="numeric" min="1" max="10" value="${ex.sets}"></label>
+        <label class="grow">Reps from<input name="r0" type="number" inputmode="numeric" min="1" value="${ex.reps[0]}"></label>
+        <label class="grow">to<input name="r1" type="number" inputmode="numeric" min="1" value="${ex.reps[1]}"></label>
+      </div>
+      <label>How to / notes<textarea name="setup" rows="3" maxlength="400" placeholder="Pulley position, attachment, cues…">${esc(ex.setup)}</textarea></label>
+      <button type="button" class="btn primary block" data-action="custom-save">${editId ? "Save changes" : "Add exercise"}</button>
+    </form>`);
+  sheet.querySelector("input[name=name]").focus();
+}
+
+function saveCustom(form) {
+  const f = Object.fromEntries(new FormData(form));
+  const name = f.name.trim();
+  if (!name) { alert("Give the exercise a name."); return; }
+  const r0 = Math.max(1, Number(f.r0) || 8), r1 = Math.max(r0, Number(f.r1) || r0);
+  const data = { name, dayId: f.dayId, type: f.type, sets: Math.max(1, Number(f.sets) || 3), reps: [r0, r1], setup: f.setup.trim(), custom: true };
+  if (f.id) {
+    Object.assign(getEx(f.id), data);
+  } else {
+    const id = "c-" + uid();
+    state.custom.push({ id, ...data });
+    picksFor(data.dayId).push(id);
+  }
+  save();
+  closeSheet();
+  if (!f.id && location.hash !== "#/day/" + data.dayId) location.hash = "#/day/" + data.dayId;
+  else render();
+}
+
+function deleteCustom(id) {
+  const ex = getEx(id);
+  if (!ex || !confirm(`Delete "${ex.name}"? Workouts you've already logged keep it.`)) return;
+  state.custom = state.custom.filter((c) => c.id !== id);
+  Object.values(state.picks).forEach((list) => { const i = list.indexOf(id); if (i >= 0) list.splice(i, 1); });
+  save();
+  closeSheet();
+  render();
 }
 
 // ---------- routing & rendering ----------
@@ -323,7 +417,7 @@ function render() {
     + `<option value="__add">+ Add person</option>` + (state.people.length > 1 ? `<option value="__remove">Remove ${esc(state.person)}</option>` : "");
 }
 
-window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+window.addEventListener("hashchange", () => { closeSheet(); render(); window.scrollTo(0, 0); });
 
 personSelect.addEventListener("change", () => {
   const v = personSelect.value;
@@ -356,7 +450,7 @@ function setField(ei, si, f, value) {
   save();
 }
 
-app.addEventListener("click", (ev) => {
+document.addEventListener("click", (ev) => {
   const t = ev.target.closest("[data-action]");
   if (!t) return;
   const a = t.dataset.action;
@@ -366,10 +460,10 @@ app.addEventListener("click", (ev) => {
   else if (a === "cancel") { if (confirm("Discard this workout?")) { state.active = null; save(); location.hash = "#/"; } }
   else if (a === "done") {
     const s = state.active.entries[ei].sets[si];
-    if (!s.done && (s.reps === "" || s.reps == null)) s.reps = EXERCISES[state.active.entries[ei].exId].reps[1];
+    if (!s.done && (s.reps === "" || s.reps == null)) s.reps = getEx(state.active.entries[ei].exId).reps[1];
     s.done = !s.done; save(); render();
   } else if (a === "bump") {
-    const ex = EXERCISES[state.active.entries[ei].exId];
+    const ex = getEx(state.active.entries[ei].exId);
     const s = state.active.entries[ei].sets[si];
     const prev = state.active.entries[ei].sets[si - 1];
     const base = s.kg === "" && prev && prev.kg !== "" ? Number(prev.kg) : Number(s.kg) || 0;
@@ -385,9 +479,15 @@ app.addEventListener("click", (ev) => {
   } else if (a === "delsession") {
     if (confirm("Delete this workout?")) { state.sessions = state.sessions.filter((s) => s.id !== t.dataset.id); save(); render(); }
   } else if (a === "export") exportData();
+  else if (a === "info") openInfo(t.dataset.ex);
+  else if (a === "close") closeSheet();
+  else if (a === "custom-new") openCustomForm(t.dataset.day);
+  else if (a === "custom-edit") openCustomForm(null, t.dataset.ex);
+  else if (a === "custom-save") saveCustom(t.closest("form"));
+  else if (a === "custom-delete") deleteCustom(t.dataset.ex);
 });
 
-app.addEventListener("change", (ev) => {
+document.addEventListener("change", (ev) => {
   const t = ev.target;
   const a = t.dataset.action;
   if (a === "pick") {
@@ -400,7 +500,7 @@ app.addEventListener("change", (ev) => {
   else if (a === "import") importData(t.files[0]);
 });
 
-app.addEventListener("input", (ev) => {
+document.addEventListener("input", (ev) => {
   const t = ev.target;
   if (t.dataset.action === "set") setField(Number(t.dataset.ei), Number(t.dataset.si), t.dataset.f, t.value);
   else if (t.dataset.action === "search") {
@@ -428,7 +528,7 @@ function importData(file) {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data.people) || !Array.isArray(data.sessions)) throw new Error("bad file");
       if (!confirm(`Replace everything on this device with the backup (${data.sessions.length} workouts)?`)) return;
-      state = { picks: {}, active: null, ...data };
+      state = { picks: {}, active: null, custom: [], ...data };
       save(); render();
     } catch (e) { alert("That doesn't look like a Garage Gym backup file."); }
   };
