@@ -187,6 +187,10 @@ function viewWorkout() {
       <span class="grow"></span>
       <button class="btn small ghost" data-action="cancel">Discard</button>
     </div>
+    <div class="row rest-pick">
+      <span class="muted">Rest</span>
+      ${REST_CHOICES.map((sec) => `<button class="chip ${restSecs() === sec ? "on" : ""}" data-action="rest-default" data-secs="${sec}">${sec ? fmtClock(sec) : "Off"}</button>`).join("")}
+    </div>
     ${w.entries.map((e, ei) => {
       const ex = getEx(e.exId);
       if (!ex) return "";
@@ -216,7 +220,9 @@ function viewWorkout() {
         <button class="btn small" style="margin-top:8px" data-action="addset" data-ei="${ei}">+ Add set</button>
       </div>`;
     }).join("")}
+    ${state.rest ? `<div style="height:80px"></div>` : ""}
     <div class="sticky-foot"><div>
+      ${restBar()}
       <button class="btn primary block" data-action="finish">Finish & save (${doneCount} set${doneCount === 1 ? "" : "s"} ticked)</button>
     </div></div>`;
 }
@@ -233,6 +239,7 @@ function finishWorkout() {
   }
   state.sessions.push({ id: uid(), person: w.person, dayId: w.dayId, date: w.date, entries });
   state.active = null;
+  state.rest = null;
   save();
   location.hash = "#/history";
 }
@@ -398,6 +405,81 @@ function deleteCustom(id) {
   render();
 }
 
+// ---------- rest timer ----------
+// Ticking a set done starts a countdown. It's stored as an end time, so it stays
+// right if the screen locks or the page reloads. At zero: vibrate + beep.
+
+const REST_CHOICES = [0, 60, 90, 120, 180];
+const restSecs = () => (state.restSecs == null ? 90 : state.restSecs);
+const fmtClock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+let audioCtx = null, wakeLock = null;
+
+function startRest() {
+  if (!restSecs()) { save(); return; }
+  state.rest = { endsAt: Date.now() + restSecs() * 1000, total: restSecs(), alerted: false };
+  save();
+  // Audio and wake lock must be set up from a tap, so do it here.
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) { /* no sound */ }
+  keepAwake();
+}
+
+function restBar() {
+  if (!state.rest) return "";
+  return `<div class="rest" id="rest">
+    <div class="rest-fill" id="rest-fill"></div>
+    <button class="chip" data-action="rest-add" data-d="-15" aria-label="15 seconds less">−15</button>
+    <div class="rest-mid"><div class="rest-label" id="rest-label">Rest</div><div class="rest-time" id="rest-time"></div></div>
+    <button class="chip" data-action="rest-add" data-d="15" aria-label="15 seconds more">+15</button>
+    <button class="chip" data-action="rest-skip">Skip</button>
+  </div>`;
+}
+
+function tickRest() {
+  const r = state.rest;
+  if (!r) return;
+  const left = Math.ceil((r.endsAt - Date.now()) / 1000);
+  if (left <= 0 && left > -6 && !r.alerted) {
+    r.alerted = true;
+    save();
+    restAlarm();
+  }
+  // Clear the "go" message a few seconds after the timer ends.
+  if (left <= -6) { state.rest = null; save(); if (location.hash === "#/workout") render(); return; }
+  const el = document.getElementById("rest");
+  if (!el) return;
+  el.classList.toggle("go", left <= 0);
+  document.getElementById("rest-time").textContent = left > 0 ? fmtClock(left) : "Go!";
+  document.getElementById("rest-label").textContent = left > 0 ? "Rest" : "Next set";
+  document.getElementById("rest-fill").style.width = `${Math.max(0, Math.min(100, (left / r.total) * 100))}%`;
+}
+
+function restAlarm() {
+  try { navigator.vibrate && navigator.vibrate([400, 200, 400, 200, 400]); } catch (e) { /* ignore */ }
+  if (!audioCtx) return;
+  try {
+    [0, 0.35, 0.7].forEach((t) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = t === 0.7 ? 1320 : 880;
+      g.gain.setValueAtTime(0.0001, audioCtx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + t + 0.25);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(audioCtx.currentTime + t);
+      o.stop(audioCtx.currentTime + t + 0.3);
+    });
+  } catch (e) { /* no sound */ }
+}
+
+// Keep the screen on during a workout so the timer can alert (where supported).
+async function keepAwake() {
+  if (!("wakeLock" in navigator) || wakeLock || document.visibilityState !== "visible") return;
+  try { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } catch (e) { /* not allowed */ }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { tickRest(); if (state.active) keepAwake(); }
+});
+setInterval(tickRest, 250);
+
 // ---------- routing & rendering ----------
 
 let searchQuery = "";
@@ -412,6 +494,7 @@ function render() {
   else if (parts[0] === "history") html = viewHistory();
   else html = viewHome();
   app.innerHTML = html;
+  tickRest();
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   personSelect.innerHTML = state.people.map((p) => `<option ${p === state.person ? "selected" : ""}>${esc(p)}</option>`).join("")
     + `<option value="__add">+ Add person</option>` + (state.people.length > 1 ? `<option value="__remove">Remove ${esc(state.person)}</option>` : "");
@@ -457,11 +540,21 @@ document.addEventListener("click", (ev) => {
   const ei = Number(t.dataset.ei), si = Number(t.dataset.si);
   if (a === "start") startWorkout(t.dataset.day);
   else if (a === "finish") finishWorkout();
-  else if (a === "cancel") { if (confirm("Discard this workout?")) { state.active = null; save(); location.hash = "#/"; } }
+  else if (a === "cancel") { if (confirm("Discard this workout?")) { state.active = null; state.rest = null; save(); location.hash = "#/"; } }
   else if (a === "done") {
     const s = state.active.entries[ei].sets[si];
     if (!s.done && (s.reps === "" || s.reps == null)) s.reps = getEx(state.active.entries[ei].exId).reps[1];
-    s.done = !s.done; save(); render();
+    s.done = !s.done;
+    if (s.done) startRest(); else save();
+    render();
+  } else if (a === "rest-add") {
+    if (state.rest) { state.rest.endsAt += Number(t.dataset.d) * 1000; state.rest.total = Math.max(1, state.rest.total + Number(t.dataset.d)); save(); tickRest(); }
+  } else if (a === "rest-skip") {
+    state.rest = null; save(); render();
+  } else if (a === "rest-default") {
+    state.restSecs = Number(t.dataset.secs);
+    if (!state.restSecs) state.rest = null;
+    save(); render();
   } else if (a === "bump") {
     const ex = getEx(state.active.entries[ei].exId);
     const s = state.active.entries[ei].sets[si];
