@@ -1,6 +1,7 @@
 // Garage Gym — workout tracker. All data is stored in this browser (localStorage).
 
 const STORE_KEY = "garage-gym-v1";
+const APP_VERSION = "6"; // keep in step with the ?v= tags in index.html
 const app = document.getElementById("app");
 const personSelect = document.getElementById("person");
 
@@ -24,6 +25,8 @@ function load() {
   return { people: ["Me"], person: "Me", sessions: [], picks: {}, active: null, custom: [] };
 }
 let state = load();
+// One-off: rest timer default changed to 1 minute.
+if (!state.restV) { state.restSecs = 60; state.restV = 2; }
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch (e) { alert("Couldn't save — storage may be full or blocked."); }
@@ -410,7 +413,7 @@ function deleteCustom(id) {
 // right if the screen locks or the page reloads. At zero: vibrate + beep.
 
 const REST_CHOICES = [0, 60, 90, 120, 180];
-const restSecs = () => (state.restSecs == null ? 90 : state.restSecs);
+const restSecs = () => (state.restSecs == null ? 60 : state.restSecs);
 const fmtClock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 let audioCtx = null, wakeLock = null;
 
@@ -499,6 +502,26 @@ function render() {
   personSelect.innerHTML = state.people.map((p) => `<option ${p === state.person ? "selected" : ""}>${esc(p)}</option>`).join("")
     + `<option value="__add">+ Add person</option>` + (state.people.length > 1 ? `<option value="__remove">Remove ${esc(state.person)}</option>` : "");
 }
+
+// Phones often keep an old copy of the page open. Check for a newer version when
+// the app opens or comes back to the front, and reload (everything is saved first).
+async function checkForUpdate() {
+  if (location.protocol === "file:") return;
+  try {
+    const html = await (await fetch(`./?check=${Date.now()}`, { cache: "no-store" })).text();
+    const live = (html.match(/app\.js\?v=(\w+)/) || [])[1];
+    // Guard against a reload loop if the server is briefly out of step.
+    let last = null;
+    try { last = sessionStorage.getItem("gg-reloaded"); } catch (e) { /* ignore */ }
+    if (live && live !== APP_VERSION && last !== live) {
+      try { sessionStorage.setItem("gg-reloaded", live); } catch (e) { /* ignore */ }
+      save();
+      location.reload();
+    }
+  } catch (e) { /* offline */ }
+}
+checkForUpdate();
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
 
 window.addEventListener("hashchange", () => { closeSheet(); render(); window.scrollTo(0, 0); });
 

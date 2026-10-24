@@ -5,7 +5,7 @@ A simple workout tracker for the home gym (cable functional trainer with two wei
 - **4 training days:** Chest & Triceps, Back & Biceps, Shoulders/Legs/Glutes, Full Body + Abs
 - Each day lists 12–13 exercises. The first 5 are ticked by default, and you choose what to do today.
 - Log weight and reps for each set. It shows what you lifted last time and your best, and tells you when to go up a weight.
-- A **rest timer** starts when you tick a set done (choose Off, 1:00, 1:30, 2:00 or 3:00). The phone vibrates and beeps when it's time for the next set, and the screen stays on during a workout.
+- A **rest timer** starts when you tick a set done (1 minute by default; choose Off, 1:00, 1:30, 2:00 or 3:00). The phone vibrates and beeps when it's time for the next set, and the screen stays on during a workout.
 - The **Progress** tab charts each exercise over time. **History** lists every workout.
 - Tap the **(i)** next to any exercise for an animated illustration, muscles worked, step-by-step instructions and tips.
 - **Add your own exercise** to any day from the bottom of that day's list. Your own exercises can be edited or deleted from their (i) sheet.
