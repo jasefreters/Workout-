@@ -1,7 +1,7 @@
 // Garage Gym — workout tracker. All data is stored in this browser (localStorage).
 
 const STORE_KEY = "garage-gym-v1";
-const APP_VERSION = "6"; // keep in step with the ?v= tags in index.html
+const APP_VERSION = "7"; // keep in step with the ?v= tags in index.html
 const app = document.getElementById("app");
 const personSelect = document.getElementById("person");
 
@@ -160,15 +160,11 @@ function startWorkout(dayId) {
   if (state.active && state.active.person === state.person && !confirm("You have a workout in progress. Replace it?")) return;
   const picks = picksFor(dayId);
   const entries = dayExercises(dayId).filter((ex) => picks.includes(ex.id)).map((ex) => {
+    // Start with one set matching the first set from last time; "+ Add set" copies it as you go.
     const last = lastFor(keyOf(ex.id));
-    const sug = suggestion(ex);
-    let sets;
-    if (last) {
-      sets = last.sets.map((s) => ({ kg: sug ? sug.kg : s.kg, reps: s.reps, done: false }));
-    } else {
-      sets = Array.from({ length: ex.sets }, () => ({ kg: ex.type === "bw" ? 0 : "", reps: "", done: false }));
-    }
-    return { exId: ex.id, sets };
+    const prev = last && last.sets[0];
+    const set = prev ? { kg: prev.kg, reps: prev.reps, done: false } : { kg: ex.type === "bw" ? 0 : "", reps: "", done: false };
+    return { exId: ex.id, sets: [set] };
   });
   state.active = { person: state.person, dayId, date: today(), entries };
   save();
