@@ -1,7 +1,7 @@
 // Garage Gym — workout tracker. All data is stored in this browser (localStorage).
 
 const STORE_KEY = "garage-gym-v1";
-const APP_VERSION = "8"; // keep in step with the ?v= tags in index.html
+const APP_VERSION = "9"; // keep in step with the ?v= tags in index.html
 const app = document.getElementById("app");
 const personSelect = document.getElementById("person");
 
@@ -539,6 +539,58 @@ function viewHistory() {
       </div>`).join("")}`;
 }
 
+// Every exercise's personal bests, and every time a record was broken.
+function trophyData() {
+  const byKey = {};
+  sortedSessions().forEach((s) => s.entries.forEach((e) => {
+    const sets = working(e.sets);
+    if (!sets.length) return;
+    const key = keyOf(e.exId);
+    const t = byKey[key] || (byKey[key] = { key, name: (getEx(key) || {}).name || e.name || key, ex: getEx(key) || { type: "other" }, best: null, e1: null, events: [] });
+    const top = topSet(sets);
+    if (beats(top, t.best)) {
+      if (t.best) t.events.push({ date: s.date, name: t.name, ex: t.ex, key, set: top, prev: t.best });
+      t.best = { ...top, date: s.date };
+    }
+    const e1 = Math.max(...sets.map(e1rm));
+    if (e1 && (!t.e1 || e1 > t.e1.v)) t.e1 = { v: e1, date: s.date };
+  }));
+  return Object.values(byKey);
+}
+
+function viewTrophies() {
+  const all = trophyData();
+  if (!all.length) return `<h1>Trophy wall</h1><div class="empty">🏆<br>Finish a workout and your personal bests will show up here.</div>`;
+  const recent = addDays(today(), -7);
+  const bests = all.slice().sort((a, b) => b.best.date.localeCompare(a.best.date) || a.name.localeCompare(b.name));
+  const events = all.flatMap((t) => t.events).sort((a, b) => b.date.localeCompare(a.date));
+  return `
+    <h1>Trophy wall</h1>
+    <p class="sub">Your personal bests, newest first. Warm-up sets don't count.</p>
+    <div class="stats">
+      <div class="stat"><div class="v">${all.length}</div><div class="k">Exercises with a PB</div></div>
+      <div class="stat"><div class="v">${events.length}</div><div class="k">Records broken</div></div>
+      <div class="stat"><div class="v">${events.filter((e) => e.date > addDays(today(), -30)).length}</div><div class="k">In the last 30 days</div></div>
+    </div>
+    <div class="trophies">
+      ${bests.map((t) => `
+        <a class="trophy ${t.best.date > recent ? "fresh" : ""}" href="#/progress/${esc(t.key)}">
+          <div class="cup">🏆</div>
+          <div class="t-name">${esc(t.name)}</div>
+          <div class="t-best">${esc(kgLabel(t.ex, t.best.kg))} × ${t.best.reps}</div>
+          ${t.ex.type !== "bw" && t.e1 ? `<div class="muted small">Est. max ${t.e1.v}kg</div>` : ""}
+          <div class="t-date">${t.best.date > recent ? `<span class="next-tag">New</span> ` : ""}${fmtDate(t.best.date)}</div>
+        </a>`).join("")}
+    </div>
+    <h2>Record timeline</h2>
+    ${events.length ? `<div class="card">${events.map((e) => `
+      <a class="list-item" href="#/progress/${esc(e.key)}" style="text-decoration:none">
+        <span>${esc(e.name)}<br><span class="muted small">${fmtDate(e.date)}</span></span>
+        <span style="text-align:right"><b>${esc(kgLabel(e.ex, e.set.kg))} × ${e.set.reps}</b><br><span class="muted small">beat ${esc(kgLabel(e.ex, e.prev.kg))} × ${e.prev.reps}</span></span>
+      </a>`).join("")}</div>`
+    : `<div class="empty">No records broken yet — your first session sets the bar. Beat it next time to land one here.</div>`}`;
+}
+
 function openLogPast() {
   openSheet(`
     <h2 class="sheet-title">Log a past workout</h2>
@@ -715,13 +767,14 @@ setInterval(tickRest, 250);
 let searchQuery = "";
 function render() {
   const parts = location.hash.replace(/^#\/?/, "").split("/");
-  const tab = parts[0] === "progress" ? "progress" : parts[0] === "history" ? "history" : "home";
+  const tab = ["progress", "trophies", "history"].includes(parts[0]) ? parts[0] : "home";
   let html;
   if (parts[0] === "day") html = viewDay(parts[1]);
   else if (parts[0] === "workout") html = viewWorkout();
   else if (parts[0] === "progress" && parts[1]) html = viewExercise(parts[1]);
   else if (parts[0] === "progress") html = viewProgress(searchQuery);
   else if (parts[0] === "history") html = viewHistory();
+  else if (parts[0] === "trophies") html = viewTrophies();
   else html = viewHome();
   app.innerHTML = html;
   tickRest();
