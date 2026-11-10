@@ -171,3 +171,46 @@ body.noscroll { overflow: hidden; }
 .rest.go { border-color: var(--good); animation: pulse 1s ease-in-out infinite; }
 .rest.go .rest-time { color: var(--good); }
 @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(60,207,122,.25); } }
+
+/* next up + day header */
+.day-row { display: flex; gap: 10px; align-items: center; }
+.day-card.next { border-color: var(--accent); box-shadow: inset 4px 0 0 var(--accent); }
+.next-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--accent);
+  color: #fff; font-size: 11px; letter-spacing: .5px; vertical-align: 1px; }
+
+/* muscle map */
+.bodymap { display: block; flex: none; }
+.bodymap.mini { width: 74px; height: auto; }
+.bodymap.info { width: 140px; height: auto; }
+.bodymap .bm-off { fill: #39424e; }
+.bodymap .bm-inert { fill: #2b323c; }
+.bodymap .bm-warm { fill: rgba(229,56,59,.5); }
+.bodymap .bm-hot { fill: var(--accent); }
+.works { display: flex; gap: 12px; align-items: center; }
+
+/* warm-up sets */
+.set-n { width: 30px; height: 30px; border-radius: 8px; border: 1px dashed transparent; background: none;
+  color: var(--muted); cursor: pointer; font-size: 15px; padding: 0; }
+.set-n:hover { border-color: var(--line); }
+tr.warm .set-n { background: #3a3220; color: #f3c35b; border-color: #6b5626; font-weight: 700; }
+tr.warm .num { opacity: .75; }
+
+.banner { background: #3a3220; border: 1px solid #6b5626; color: #f3c35b; border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+
+/* toast */
+#toast { position: fixed; left: 50%; top: calc(70px + env(safe-area-inset-top)); transform: translate(-50%, -20px);
+  background: var(--good); color: #062; font-weight: 700; padding: 10px 16px; border-radius: 999px; z-index: 30;
+  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; box-shadow: 0 6px 20px rgba(0,0,0,.4); max-width: 90vw; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* activity heatmap */
+.card.heat { padding: 12px; }
+.heatmap { width: 100%; height: auto; display: block; }
+.heatmap .hm { fill: var(--card2); }
+.heatmap .hm.on { fill: var(--good); }
+.heatmap .lbl { fill: var(--muted); font-size: 9px; }
+
+/* goal line */
+.chart .goal { stroke: var(--good); stroke-width: 2; stroke-dasharray: 6 5; }
+.chart .goal-lbl { fill: var(--good); }
