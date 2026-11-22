@@ -149,7 +149,7 @@ const TYPE_INFO = {
   other: { label: "Other weights", step: 1, unit: "kg" },
 };
 
-// Rehab exercises from the chiropractor. Optional add-on after picking a day,
+// Rehab exercises. Optional add-on after picking a day,
 // or done on their own from the home screen. Not counted for records or
 // "go up" suggestions. perSide: do the reps on each side. repLabel "Secs": a hold.
 const REHAB = {

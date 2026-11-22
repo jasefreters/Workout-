@@ -1,7 +1,7 @@
 // Garage Gym — workout tracker. All data is stored in this browser (localStorage).
 
 const STORE_KEY = "garage-gym-v1";
-const APP_VERSION = "11"; // keep in step with the ?v= tags in index.html
+const APP_VERSION = "12"; // keep in step with the ?v= tags in index.html
 const app = document.getElementById("app");
 const personSelect = document.getElementById("person");
 
@@ -138,6 +138,10 @@ const isoOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getD
 const today = () => isoOf(new Date());
 const addDays = (iso, n) => { const d = new Date(iso + "T00:00"); d.setDate(d.getDate() + n); return isoOf(d); };
 const mondayOf = (iso) => addDays(iso, -((new Date(iso + "T00:00").getDay() + 6) % 7));
+const daysAgo = (iso) => {
+  const n = Math.round((new Date(today() + "T00:00") - new Date(iso + "T00:00")) / 86400000);
+  return n <= 0 ? "today" : n === 1 ? "yesterday" : `${n} days ago`;
+};
 const fmtDate = (iso) => new Date(iso + "T00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 const kgLabel = (ex, kg) => (ex.type === "bw" ? (kg ? `BW +${kg}kg` : "BW") : `${kg}kg`);
 const setsText = (ex, sets) => {
@@ -165,9 +169,11 @@ function lastLine(ex) {
   const key = keyOf(ex.id);
   const last = lastFor(key);
   if (!last) return `<div class="last">Not done yet</div>`;
+  const when = `${fmtDate(last.date)} · ${daysAgo(last.date)}`;
+  if (ex.rehab) return `<div class="last">Last done ${when}: <b>${esc(setsText(ex, last.sets))}</b></div>`;
   const best = bestEver(key);
   const sug = suggestion(ex);
-  return `<div class="last">Last (${fmtDate(last.date)}): <b>${esc(setsText(ex, last.sets))}</b>
+  return `<div class="last">Last (${when}): <b>${esc(setsText(ex, last.sets))}</b>
     · Best: <b>${esc(kgLabel(ex, best.kg))} × ${best.reps}</b>
     ${sug ? `<br><span class="up">↑ ${esc(sug.text)}</span>` : ""}</div>`;
 }
@@ -203,7 +209,7 @@ function viewHome() {
         <div class="grow">
           <div class="day">Rehab</div>
           <div class="title">Rehab only</div>
-          <div class="muted small">Your chiro's exercises on their own${lastByDay[REHAB.id] ? " · last done " + fmtDate(lastByDay[REHAB.id]) : ""}. You can also add them after any day's workout.</div>
+          <div class="muted small">Rehab exercises on their own${lastByDay[REHAB.id] ? " · last done " + fmtDate(lastByDay[REHAB.id]) : ""}. You can also add them after any day's workout.</div>
         </div>
         ${bodyMap(dayMuscles(REHAB.id), "mini")}
       </div>
@@ -228,11 +234,13 @@ function viewHome() {
 }
 
 const dayById = (id) => (id === REHAB.id ? REHAB : DAYS.find((d) => d.id === id));
+// Rehab exercises, including ones since renamed or removed (their ids start with "rehab-").
+const isRehabId = (id) => !!(getEx(id) || {}).rehab || id.startsWith("rehab-");
 const isRehabOn = () => !!state.rehabOn[state.person];
 
 function picksFor(dayId) {
   const k = state.person + "|" + dayId;
-  if (!state.picks[k]) state.picks[k] = dayExercises(dayId).slice(0, dayId === REHAB.id ? 99 : 5).map((e) => e.id);
+  if (!state.picks[k]) state.picks[k] = dayId === REHAB.id ? [] : dayExercises(dayId).slice(0, 5).map((e) => e.id);
   return state.picks[k];
 }
 
@@ -265,7 +273,7 @@ function viewDay(dayId) {
     <a href="#/" class="muted small">← Back</a>
     <div class="day-row">
       <div class="grow"><h1>${isRehab ? "Rehab" : day.title}</h1>
-      <p class="sub">${isRehab ? "Your chiro's exercises. Tick the ones you're doing today." : "Tick the exercises you want to do today (5 is a good number)."}</p></div>
+      <p class="sub">${isRehab ? "Tick the rehab exercises you're doing today." : "Tick the exercises you want to do today (5 is a good number)."}</p></div>
       ${bodyMap(dayMuscles(dayId), "mini")}
     </div>
     ${dayExercises(dayId).map((ex) => pickCard(ex, dayId, picks)).join("")}
@@ -273,7 +281,7 @@ function viewDay(dayId) {
     ${isRehab ? "" : `
     <div class="card rehab-addon ${isRehabOn() ? "on" : ""}">
       <label class="switch-row">
-        <span class="grow"><b>Add rehab</b><br><span class="muted small">Optional — your chiro's exercises, done after this workout.</span></span>
+        <span class="grow"><b>Add rehab</b><br><span class="muted small">Optional — tick the rehab exercises to do after this workout.</span></span>
         <input type="checkbox" class="switch" data-action="rehab-on" ${isRehabOn() ? "checked" : ""}>
       </label>
     </div>
@@ -573,13 +581,13 @@ function viewHistory() {
       <button class="btn small" data-action="log-past">+ Log a past workout</button>
     </div>
     ${list.map((s) => `
-      <div class="card">
+      <div class="card ${s.dayId === REHAB.id ? "rehab-session" : ""}">
         <div class="ex-head"><div><div class="name">${dayById(s.dayId).title}</div><div class="muted small">${fmtDate(s.date)}</div></div>
           <div class="row">
             <button class="btn small" data-action="editsession" data-id="${s.id}">Edit</button>
             <button class="del" data-action="delsession" data-id="${s.id}" aria-label="Delete workout">🗑</button>
           </div></div>
-        ${s.entries.map((e) => { const ex = getEx(e.exId); return `<div class="list-item"><span>${esc(ex ? ex.name : e.name || e.exId)}</span><span class="muted">${esc(setsText(ex || { type: "other" }, e.sets))}</span></div>`; }).join("")}
+        ${s.entries.map((e) => { const ex = getEx(e.exId); return `<div class="list-item ${isRehabId(e.exId) ? "rehab-item" : ""}"><span>${esc(ex ? ex.name : e.name || e.exId)}</span><span class="muted">${esc(setsText(ex || { type: e.sets.every((x) => !x.kg) ? "bw" : "other" }, e.sets))}</span></div>`; }).join("")}
       </div>`).join("")}`;
 }
 
@@ -673,7 +681,7 @@ function openInfo(exId) {
   openSheet(`
     <h2 class="sheet-title">${esc(ex.name)}</h2>
     <div><span class="tag">${TYPE_INFO[ex.type].label}</span><span class="tag">${ex.sets} sets × ${repRange(ex)}${ex.repLabel === "Secs" ? "" : " reps"}</span>${ex.perSide ? `<span class="tag">each side</span>` : ""}${ex.rehab ? `<span class="tag">Rehab</span>` : ""}</div>
-    ${ex.rehab ? `<p class="muted small" style="margin-top:10px">From your chiro — follow the reps, range and cues they gave you. Stop if anything hurts.</p>` : ""}
+    ${ex.rehab ? `<p class="muted small" style="margin-top:10px">Rehab exercise — go gently and stop if anything hurts.</p>` : ""}
     ${ex.custom ? "" : `<div class="art-wrap">${renderArt(g.art)}<div class="muted small">Start ⇄ finish position</div></div>`}
     ${g.muscles ? `<h3>Works</h3><div class="works">${bodyMap(musclesOf(exId), "info")}<p>${esc(g.muscles)}</p></div>` : ""}
     ${ex.setup ? `<h3>Setup</h3><p>${esc(ex.setup)}</p>` : ""}
@@ -964,7 +972,11 @@ document.addEventListener("change", (ev) => {
     if (!t.checked && i >= 0) picks.splice(i, 1);
     save(); render();
   } else if (a === "date") { state.active.date = t.value && t.value <= today() ? t.value : today(); save(); }
-  else if (a === "rehab-on") { state.rehabOn[state.person] = t.checked; save(); render(); }
+  else if (a === "rehab-on") {
+    state.rehabOn[state.person] = t.checked;
+    if (t.checked) state.picks[state.person + "|" + REHAB.id] = [];
+    save(); render();
+  }
   else if (a === "stackmax") { const v = Number(t.value); if (v > 0) { state.stackMax = round(v); save(); } render(); }
   else if (a === "bw-goal") { const v = Number(t.value); if (v > 0) state.goals[state.person] = round(v); else delete state.goals[state.person]; save(); render(); }
   else if (a === "addex" && t.value) {

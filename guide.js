@@ -278,13 +278,13 @@ const GUIDE = {
       "Lower your chest to the floor, elbows at about 45°.",
       "Push back up."],
     tips: ["Easier: hands on the Smith bar set low. Harder: feet on the bench."] },
-  // ----- Rehab (from the chiropractor) -----
+  // ----- Rehab -----
   "rehab-rdl": { art: "rdl", muscles: "Hamstrings, glutes, lower back",
     steps: ["Pulley at the bottom with the straight bar. Use a light weight.",
       "Stand tall with soft knees.",
       "Push your hips back and let the bar slide down your thighs, back flat.",
       "Squeeze your glutes to stand back up."],
-    tips: ["Follow the range and weight your chiro gave you.", "Stop if you feel pain in your lower back."] },
+    tips: ["Keep the weight light and the range comfortable.", "Stop if you feel pain in your lower back."] },
   "rehab-sl-rdl": { art: "slrdl", muscles: "Glutes, hamstrings, core",
     steps: ["Stand on one leg with a soft knee.",
       "Hinge forward, letting the other leg go straight back behind you.",
@@ -333,7 +333,7 @@ const GUIDE = {
       "Hold the stretch.",
       "Lean back up to standing tall, then hike your opposite leg into the air — drive the knee up and lift that hip.",
       "Lower the leg and repeat. Then swap sides."],
-    tips: ["Hold for as long as your chiro showed you before hiking the leg.", "Stand tall on the inside leg when you hike — don't let that hip drop."] },
+    tips: ["Hold the stretch for a few slow breaths before hiking the leg.", "Stand tall on the inside leg when you hike — don't let that hip drop."] },
 };
 
 const GENERIC_GUIDE = { art: "standing", muscles: "", steps: [], tips: [] };

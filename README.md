@@ -6,7 +6,7 @@ A simple workout tracker for the home gym (cable functional trainer with two wei
 - Each day lists 12–13 exercises. The first 5 are ticked by default, and you choose what to do today.
 - Log weight and reps for each set. It shows what you lifted last time and your best, and tells you when to go up a weight.
 - A **rest timer** starts when you tick a set done (1 minute by default; choose Off, 1:00, 1:30, 2:00 or 3:00). The phone vibrates and beeps when it's time for the next set, and the screen stays on during a workout.
-- **Rehab add-on**: after picking a day, switch on **Add rehab** to add your chiro's exercises to the end of the workout, or do them on their own from the **Rehab only** card. Rehab exercises are logged like the others but don't count for records or "go up" suggestions.
+- **Rehab add-on**: after picking a day, switch on **Add rehab** to add rehab exercises to the end of the workout, or do them on their own from the **Rehab only** card. Rehab exercises are logged like the others but don't count for records or "go up" suggestions.
 - **Next up**: the home screen highlights the day after the one you did last, so the four days rotate whenever you train.
 - **Muscle maps** show which muscles each day and exercise work.
 - **Warm-up sets**: tap a set's number to mark it as a warm-up. Warm-ups are saved but don't count towards records, charts or suggestions.

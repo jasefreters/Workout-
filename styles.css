@@ -242,3 +242,7 @@ tr.warm .num { opacity: .75; }
 .rehab-addon ~ .card.pick input[type=checkbox] { accent-color: var(--rehab); }
 .rehab-head { color: var(--rehab); margin-top: 24px; }
 .card.rehab-ex { border-left: 3px solid var(--rehab); }
+.list-item.rehab-item > span:first-child { color: var(--rehab); }
+.card:not(.rehab-session) .list-item.rehab-item > span:first-child::before { content: "Rehab · "; font-size: 12px; font-weight: 600; opacity: .8; }
+.card.rehab-session { border-left: 3px solid var(--rehab); }
+.card.rehab-session .ex-head .name { color: var(--rehab); }
