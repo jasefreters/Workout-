@@ -1,7 +1,7 @@
 // Garage Gym — workout tracker. All data is stored in this browser (localStorage).
 
 const STORE_KEY = "garage-gym-v1";
-const APP_VERSION = "12"; // keep in step with the ?v= tags in index.html
+const APP_VERSION = "13"; // keep in step with the ?v= tags in index.html
 const app = document.getElementById("app");
 const personSelect = document.getElementById("person");
 
@@ -81,6 +81,19 @@ const lastFor = (key, skipId) => { const h = historyFor(key, skipId); return h[h
 const e1rm = (s) => (s.kg > 0 && s.reps > 0 ? round(s.reps === 1 ? s.kg : s.kg * (1 + s.reps / 30)) : 0);
 const bestE1 = (key, skipId) => Math.max(0, ...historyFor(key, skipId).map((h) => Math.max(...h.sets.map(e1rm))));
 
+// Weight for a max set: the estimated one-rep max from past sessions and the
+// sets already done today, rounded to a weight you can set (and within the stack).
+function maxTarget(ex, entry) {
+  if (!ex || ex.type === "bw") return null;
+  const doneToday = entry.sets.filter((s) => s.done && !s.warmup && !s.max).map((s) => e1rm({ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0 }));
+  const est = Math.max(bestE1(keyOf(ex.id), state.active.editingId), ...doneToday);
+  if (!est) return null;
+  const step = TYPE_INFO[ex.type].step;
+  let kg = round(Math.round(est / step) * step);
+  if (ex.type === "cable") kg = Math.min(kg, stackMax());
+  return kg;
+}
+
 // A new record: heavier than ever, more reps at your best weight, or a higher estimated max.
 // The first time you do an exercise doesn't count.
 function isPR(ex, s, skipId) {
@@ -102,8 +115,10 @@ const HARDER = { "lat-pulldown": "single-pulldown", "seated-row": "single-row", 
 function suggestion(ex) {
   if (ex.rehab) return null;
   const last = lastFor(keyOf(ex.id));
-  if (!last || last.sets.length < 2 || !last.sets.every((s) => s.reps >= ex.reps[1])) return null;
-  const top = topSet(last.sets);
+  // Max (one heavy rep) sets don't count towards hitting the rep range.
+  const reg = last ? last.sets.filter((s) => !s.max) : [];
+  if (reg.length < 2 || !reg.every((s) => s.reps >= ex.reps[1])) return null;
+  const top = topSet(reg);
   if (ex.type === "bw") return { kg: top.kg, text: "Hit all reps last time — add reps or slow the lowering" };
   if (ex.type === "cable" && top.kg >= stackMax()) {
     const alt = getEx(HARDER[keyOf(ex.id)] || "");
@@ -151,8 +166,8 @@ const setsText = (ex, sets) => {
     if (kgs.length === 1) return `${kgLabel(ex, kgs[0])} × ${list.map((s) => r(s.reps)).join(", ")}`;
     return list.map((s) => `${kgLabel(ex, s.kg)}×${r(s.reps)}`).join(", ");
   };
-  const warm = sets.filter((s) => s.warmup), work = working(sets);
-  return [warm.length ? `Warm-up ${part(warm)}` : "", work.length ? part(work) : ""].filter(Boolean).join(" · ");
+  const warm = sets.filter((s) => s.warmup), work = working(sets).filter((s) => !s.max), max = sets.filter((s) => s.max && !s.warmup);
+  return [warm.length ? `Warm-up ${part(warm)}` : "", work.length ? part(work) : "", max.length ? `Max ${part(max)}` : ""].filter(Boolean).join(" · ");
 };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -321,7 +336,7 @@ function editSession(id) {
   if (state.active && state.active.person === state.person && !confirm("You have a workout in progress. Replace it?")) return;
   state.active = {
     person: s.person, dayId: s.dayId, date: s.date, editingId: s.id, noRest: true,
-    entries: s.entries.map((e) => ({ exId: e.exId, name: e.name, sets: e.sets.map((x) => ({ kg: x.kg, reps: x.reps, warmup: !!x.warmup, done: true })) })),
+    entries: s.entries.map((e) => ({ exId: e.exId, name: e.name, sets: e.sets.map((x) => ({ kg: x.kg, reps: x.reps, warmup: !!x.warmup, max: !!x.max, done: true })) })),
   };
   state.rest = null;
   save();
@@ -351,7 +366,7 @@ function viewWorkout() {
       <span class="muted">Rest</span>
       ${REST_CHOICES.map((sec) => `<button class="chip ${restSecs() === sec ? "on" : ""}" data-action="rest-default" data-secs="${sec}">${sec ? fmtClock(sec) : "Off"}</button>`).join("")}
     </div>`}
-    <p class="muted small" style="margin:0 0 12px">Tap a set's number to mark it as a warm-up. Warm-ups don't count towards records. 🏆 = new record.</p>
+    <p class="muted small" style="margin:0 0 12px">Tap a set's number: <b>W</b> = warm-up (doesn't count towards records), <b>M</b> = max set, one heavy rep at your estimated max. 🏆 = new record.</p>
     ${w.entries.map((e, ei) => {
       const ex = getEx(e.exId);
       if (!ex) return "";
@@ -367,11 +382,12 @@ function viewWorkout() {
           <tr><th></th><th>${unit}</th><th>${ex.repLabel || "Reps"}</th><th></th><th></th></tr>
           ${e.sets.map((s, si) => {
             const pr = s.done && isPR(ex, s, w.editingId);
-            const label = s.warmup ? "W" : pr ? "🏆" : ++n;
-            if (!s.warmup && pr) n++;
+            const label = s.warmup ? "W" : s.max ? (pr ? "M🏆" : "M") : pr ? "🏆" : ++n;
+            if (!s.warmup && (s.max || pr)) n++;
+            const aria = s.warmup ? "Warm-up set, tap to make it a max set" : s.max ? "Max set, tap to make it a normal set" : `Set ${si + 1}, tap to mark as warm-up`;
             return `
-            <tr class="${s.done ? "done" : ""} ${s.warmup ? "warm" : ""}">
-              <td class="n"><button class="set-n" data-action="warm" data-ei="${ei}" data-si="${si}" aria-label="${s.warmup ? "Warm-up set, tap to make it a working set" : "Set " + (si + 1) + ", tap to mark as warm-up"}">${label}</button></td>
+            <tr class="${s.done ? "done" : ""} ${s.warmup ? "warm" : ""} ${s.max ? "max" : ""}">
+              <td class="n"><button class="set-n" data-action="warm" data-ei="${ei}" data-si="${si}" aria-label="${aria}">${label}</button></td>
               <td><div class="num">
                 <button data-action="bump" data-ei="${ei}" data-si="${si}" data-f="kg" data-d="-1" aria-label="Less weight">−</button>
                 <input type="number" inputmode="decimal" step="any" min="0" value="${s.kg}" data-action="set" data-ei="${ei}" data-si="${si}" data-f="kg">
@@ -406,7 +422,7 @@ function finishWorkout() {
     .map((e) => {
       const ex = getEx(e.exId);
       const sets = e.sets.filter((s) => s.done && Number(s.reps) > 0)
-        .map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps), ...(s.warmup ? { warmup: true } : {}) }));
+        .map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps), ...(s.warmup ? { warmup: true } : {}), ...(s.max ? { max: true } : {}) }));
       return { exId: e.exId, name: ex ? ex.name : e.name, sets };
     })
     .filter((e) => e.sets.length);
@@ -935,8 +951,21 @@ document.addEventListener("click", (ev) => {
   } else if (a === "delsession") {
     if (confirm("Delete this workout?")) { state.sessions = state.sessions.filter((s) => s.id !== t.dataset.id); save(); render(); }
   } else if (a === "warm") {
-    const s = state.active.entries[ei].sets[si];
-    s.warmup = !s.warmup; save(); render();
+    // Tapping the set number cycles: normal -> W (warm-up) -> M (max) -> normal.
+    const entry = state.active.entries[ei], s = entry.sets[si];
+    if (s.warmup) {
+      s.warmup = false;
+      s.max = true;
+      s.preMax = { kg: s.kg, reps: s.reps };
+      const kg = maxTarget(getEx(entry.exId), entry);
+      if (kg != null) s.kg = kg;
+      s.reps = getEx(entry.exId).type === "bw" ? "" : 1;
+    } else if (s.max) {
+      s.max = false;
+      if (s.preMax) { s.kg = s.preMax.kg; s.reps = s.preMax.reps; }
+      delete s.preMax;
+    } else s.warmup = true;
+    save(); render();
   } else if (a === "editsession") editSession(t.dataset.id);
   else if (a === "log-past") openLogPast();
   else if (a === "log-past-go") {

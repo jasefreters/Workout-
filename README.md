@@ -9,7 +9,7 @@ A simple workout tracker for the home gym (cable functional trainer with two wei
 - **Rehab add-on**: after picking a day, switch on **Add rehab** to add rehab exercises to the end of the workout, or do them on their own from the **Rehab only** card. Rehab exercises are logged like the others but don't count for records or "go up" suggestions.
 - **Next up**: the home screen highlights the day after the one you did last, so the four days rotate whenever you train.
 - **Muscle maps** show which muscles each day and exercise work.
-- **Warm-up sets**: tap a set's number to mark it as a warm-up. Warm-ups are saved but don't count towards records, charts or suggestions.
+- **Warm-up and max sets**: tap a set's number to cycle normal → **W** (warm-up) → **M** (max). Warm-ups are saved but don't count towards records, charts or suggestions. A max set is one heavy rep with the weight pre-set to your estimated one-rep max (rounded to a weight you can set and capped at the stack); for bodyweight exercises it's a max-reps set.
 - **Records**: a 🏆 and a pop-up when you beat your best, and each exercise shows an estimated one-rep max with its own chart.
 - **Stack-aware suggestions**: set your heaviest cable stack setting on the home screen. Once you max it out, the app suggests a harder variation instead of more weight.
 - The **Trophies** tab is a wall of your personal bests with the date each was set, plus a timeline of every record you've broken.
