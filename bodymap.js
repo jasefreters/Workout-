@@ -19,6 +19,7 @@ const MUSCLE_WORDS = [
   [/hamstring/, ["hamstring"]],
   [/calves|calf/, ["calves"]],
   [/hip flexor/, ["hip-flexors"]],
+  [/inner thigh|adductor/, ["adductors"]],
 ];
 
 // Body parts that are outline only and never light up.

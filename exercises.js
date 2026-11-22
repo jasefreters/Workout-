@@ -148,3 +148,34 @@ const TYPE_INFO = {
   bw:    { label: "Bodyweight", step: 2.5, unit: "+kg" },
   other: { label: "Other weights", step: 1, unit: "kg" },
 };
+
+// Rehab exercises from the chiropractor. Optional add-on after picking a day,
+// or done on their own from the home screen. Not counted for records or
+// "go up" suggestions. perSide: do the reps on each side. repLabel "Secs": a hold.
+const REHAB = {
+  id: "rehab",
+  name: "Rehab",
+  title: "Rehab",
+  exercises: [
+    { id: "rehab-rdl", name: "Romanian Deadlift", type: "cable", reps: [10, 12], sets: 2,
+      setup: "Pulley at the bottom, straight bar — keep it light. Hinge at the hips with a flat back." },
+    { id: "rehab-sl-rdl", name: "Single-Leg RDL with Twist", type: "bw", reps: [8, 10], sets: 2, perSide: true,
+      setup: "Balance on one leg, hinge forward and turn your chest toward the standing leg. Hold the frame for balance if needed." },
+    { id: "rehab-low-row", name: "Low Row", type: "cable", reps: [10, 15], sets: 2,
+      setup: "Pulley at the bottom, D-handle or V-handle. Pull to your hip and squeeze the shoulder blade back." },
+    { id: "rehab-woodchop", name: "Wood Chop", type: "cable", reps: [10, 12], sets: 2, perSide: true,
+      setup: "Pulley high, one D-handle in both hands. Rotate down across your body, turning through your hips." },
+    { id: "rehab-lunge", name: "Lunge", type: "bw", reps: [8, 12], sets: 2, perSide: true,
+      setup: "Step back (or forward) and lower until the back knee nearly touches the floor." },
+    { id: "rehab-side-lunge", name: "Side Lunge", type: "bw", reps: [8, 10], sets: 2, perSide: true,
+      setup: "Wide stance, sit back into one hip with that knee bent, other leg straight." },
+    { id: "rehab-side-jump", name: "Side-to-Side Jumps", type: "bw", reps: [10, 20], sets: 2,
+      setup: "Small jumps side to side, landing softly with knees bent." },
+    { id: "rehab-dead-bug", name: "Dead Bug", type: "bw", reps: [8, 10], sets: 2, perSide: true,
+      setup: "On your back, arms up, knees over hips. Lower opposite arm and leg, keeping your lower back down." },
+    { id: "rehab-hip-flexor", name: "Hip Flexor Stretch", type: "bw", reps: [30, 45], repLabel: "Secs", sets: 2, perSide: true,
+      setup: "Half-kneel on the mat, squeeze the back glute and shift your hips forward. Log seconds held." },
+    { id: "rehab-hip-hike", name: "Wall Hip Hike", type: "bw", reps: [10, 15], sets: 2, perSide: true,
+      setup: "Stand side-on to a wall on the outside leg, lift the inside knee and hip to press into the wall." },
+  ].map((ex) => ({ ...ex, rehab: true })),
+};

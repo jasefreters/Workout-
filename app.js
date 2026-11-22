@@ -1,14 +1,14 @@
 // Garage Gym — workout tracker. All data is stored in this browser (localStorage).
 
 const STORE_KEY = "garage-gym-v1";
-const APP_VERSION = "9"; // keep in step with the ?v= tags in index.html
+const APP_VERSION = "10"; // keep in step with the ?v= tags in index.html
 const app = document.getElementById("app");
 const personSelect = document.getElementById("person");
 
 // ---------- data ----------
 
 const EXERCISES = {};
-DAYS.forEach((d) => d.exercises.forEach((ex) => { EXERCISES[ex.id] = { ...ex, dayId: d.id }; }));
+DAYS.concat(REHAB).forEach((d) => d.exercises.forEach((ex) => { EXERCISES[ex.id] = { ...ex, dayId: d.id }; }));
 
 // Built-in exercise or one the user added themselves.
 const getEx = (id) => EXERCISES[id] || state.custom.find((c) => c.id === id);
@@ -19,7 +19,7 @@ const keyOf = (exId) => (getEx(exId) && getEx(exId).sameAs) || exId;
 
 // New fields only ever get added with defaults here, so older saved data keeps loading.
 function load() {
-  const base = { people: ["Me"], person: "Me", sessions: [], picks: {}, active: null, custom: [], body: {}, goals: {} };
+  const base = { people: ["Me"], person: "Me", sessions: [], picks: {}, active: null, custom: [], body: {}, goals: {}, rehabOn: {} };
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY));
     if (s && Array.isArray(s.people)) return { ...base, ...s };
@@ -78,7 +78,7 @@ const bestE1 = (key, skipId) => Math.max(0, ...historyFor(key, skipId).map((h) =
 // A new record: heavier than ever, more reps at your best weight, or a higher estimated max.
 // The first time you do an exercise doesn't count.
 function isPR(ex, s, skipId) {
-  if (s.warmup || !(Number(s.reps) > 0)) return false;
+  if (ex.rehab || s.warmup || !(Number(s.reps) > 0)) return false;
   const key = keyOf(ex.id);
   const best = bestEver(key, skipId);
   if (!best) return false;
@@ -94,6 +94,7 @@ const HARDER = { "lat-pulldown": "single-pulldown", "seated-row": "single-row", 
 
 // Suggest going up when every working set last time hit the top of the rep range.
 function suggestion(ex) {
+  if (ex.rehab) return null;
   const last = lastFor(keyOf(ex.id));
   if (!last || last.sets.length < 2 || !last.sets.every((s) => s.reps >= ex.reps[1])) return null;
   const top = topSet(last.sets);
@@ -109,7 +110,7 @@ function suggestion(ex) {
 
 // The day after the last one you did, so you can train whenever and keep the rotation.
 function nextDayId() {
-  const list = sortedSessions();
+  const list = sortedSessions().filter((s) => s.dayId !== REHAB.id);
   if (!list.length) return DAYS[0].id;
   const i = DAYS.findIndex((d) => d.id === list[list.length - 1].dayId);
   return DAYS[(i + 1) % DAYS.length].id;
@@ -136,8 +137,9 @@ const kgLabel = (ex, kg) => (ex.type === "bw" ? (kg ? `BW +${kg}kg` : "BW") : `$
 const setsText = (ex, sets) => {
   const part = (list) => {
     const kgs = [...new Set(list.map((s) => s.kg))];
-    if (kgs.length === 1) return `${kgLabel(ex, kgs[0])} × ${list.map((s) => s.reps).join(", ")}`;
-    return list.map((s) => `${kgLabel(ex, s.kg)}×${s.reps}`).join(", ");
+    const r = (n) => `${n}${ex.repLabel === "Secs" ? "s" : ""}`;
+    if (kgs.length === 1) return `${kgLabel(ex, kgs[0])} × ${list.map((s) => r(s.reps)).join(", ")}`;
+    return list.map((s) => `${kgLabel(ex, s.kg)}×${r(s.reps)}`).join(", ");
   };
   const warm = sets.filter((s) => s.warmup), work = working(sets);
   return [warm.length ? `Warm-up ${part(warm)}` : "", work.length ? part(work) : ""].filter(Boolean).join(" · ");
@@ -190,6 +192,16 @@ function viewHome() {
           ${bodyMap(dayMuscles(d.id), "mini")}
         </div>
       </a>`).join("")}
+    <a class="card day-card rehab-card" href="#/day/${REHAB.id}">
+      <div class="day-row">
+        <div class="grow">
+          <div class="day">Rehab</div>
+          <div class="title">Rehab only</div>
+          <div class="muted small">Your chiro's exercises on their own${lastByDay[REHAB.id] ? " · last done " + fmtDate(lastByDay[REHAB.id]) : ""}. You can also add them after any day's workout.</div>
+        </div>
+        ${bodyMap(dayMuscles(REHAB.id), "mini")}
+      </div>
+    </a>
     <h2>Settings</h2>
     <div class="card stack">
       <div class="row">
@@ -209,41 +221,60 @@ function viewHome() {
     </div>`;
 }
 
-const dayById = (id) => DAYS.find((d) => d.id === id);
+const dayById = (id) => (id === REHAB.id ? REHAB : DAYS.find((d) => d.id === id));
+const isRehabOn = () => !!state.rehabOn[state.person];
 
 function picksFor(dayId) {
   const k = state.person + "|" + dayId;
-  if (!state.picks[k]) state.picks[k] = dayExercises(dayId).slice(0, 5).map((e) => e.id);
+  if (!state.picks[k]) state.picks[k] = dayExercises(dayId).slice(0, dayId === REHAB.id ? 99 : 5).map((e) => e.id);
   return state.picks[k];
 }
 
-function viewDay(dayId) {
-  const day = dayById(dayId);
-  if (!day) return viewHome();
-  const picks = picksFor(dayId);
+const repRange = (ex) => `${ex.reps[0]}–${ex.reps[1]}${ex.repLabel === "Secs" ? "s" : ""}`;
+const exTags = (ex) => `<span class="tag">${TYPE_INFO[ex.type].label}</span><span class="tag">${ex.sets} × ${repRange(ex)}</span>${ex.perSide ? `<span class="tag">each side</span>` : ""}${ex.custom ? `<span class="tag">Your own</span>` : ""}`;
+
+function pickCard(ex, dayId, picks) {
   return `
-    <a href="#/" class="muted small">← Back</a>
-    <div class="day-row">
-      <div class="grow"><h1>${day.title}</h1>
-      <p class="sub">Tick the exercises you want to do today (5 is a good number).</p></div>
-      ${bodyMap(dayMuscles(dayId), "mini")}
-    </div>
-    ${dayExercises(dayId).map((ex) => `
       <div class="card pick ${picks.includes(ex.id) ? "on" : ""}">
         <label class="pick-main">
           <input type="checkbox" data-action="pick" data-day="${dayId}" data-ex="${ex.id}" ${picks.includes(ex.id) ? "checked" : ""}>
           <div class="grow">
             <div class="name">${esc(ex.name)}</div>
-            <div><span class="tag">${TYPE_INFO[ex.type].label}</span><span class="tag">${ex.sets} × ${ex.reps[0]}–${ex.reps[1]}</span>${ex.custom ? `<span class="tag">Your own</span>` : ""}</div>
+            <div>${exTags(ex)}</div>
             ${lastLine(ex)}
           </div>
         </label>
         ${infoBtn(ex)}
-      </div>`).join("")}
-    <button class="btn block dashed" data-action="custom-new" data-day="${dayId}">+ Add your own exercise</button>
+      </div>`;
+}
+
+function viewDay(dayId) {
+  const day = dayById(dayId);
+  if (!day) return viewHome();
+  const isRehab = dayId === REHAB.id;
+  const picks = picksFor(dayId);
+  const rehabPicks = isRehab ? [] : picksFor(REHAB.id);
+  const rehabCount = !isRehab && isRehabOn() ? rehabPicks.filter((id) => getEx(id)).length : 0;
+  return `
+    <a href="#/" class="muted small">← Back</a>
+    <div class="day-row">
+      <div class="grow"><h1>${isRehab ? "Rehab" : day.title}</h1>
+      <p class="sub">${isRehab ? "Your chiro's exercises. Tick the ones you're doing today." : "Tick the exercises you want to do today (5 is a good number)."}</p></div>
+      ${bodyMap(dayMuscles(dayId), "mini")}
+    </div>
+    ${dayExercises(dayId).map((ex) => pickCard(ex, dayId, picks)).join("")}
+    <button class="btn block dashed" data-action="custom-new" data-day="${dayId}">+ Add your own ${isRehab ? "rehab " : ""}exercise</button>
+    ${isRehab ? "" : `
+    <div class="card rehab-addon ${isRehabOn() ? "on" : ""}">
+      <label class="switch-row">
+        <span class="grow"><b>Add rehab</b><br><span class="muted small">Optional — your chiro's exercises, done after this workout.</span></span>
+        <input type="checkbox" class="switch" data-action="rehab-on" ${isRehabOn() ? "checked" : ""}>
+      </label>
+    </div>
+    ${isRehabOn() ? dayExercises(REHAB.id).map((ex) => pickCard(ex, REHAB.id, rehabPicks)).join("") : ""}`}
     <div class="sticky-foot"><div>
-      <button class="btn primary block" data-action="start" data-day="${dayId}" ${picks.length ? "" : "disabled"}>
-        Start workout (${picks.length} exercise${picks.length === 1 ? "" : "s"})
+      <button class="btn primary block" data-action="start" data-day="${dayId}" ${picks.length + rehabCount ? "" : "disabled"}>
+        Start ${isRehab ? "rehab" : "workout"} (${picks.length} exercise${picks.length === 1 ? "" : "s"}${rehabCount ? ` + ${rehabCount} rehab` : ""})
       </button></div></div>`;
 }
 
@@ -256,7 +287,12 @@ function firstSetFor(ex) {
 function startWorkout(dayId, date) {
   if (state.active && state.active.person === state.person && !confirm("You have a workout in progress. Replace it?")) return;
   const picks = picksFor(dayId);
-  const entries = dayExercises(dayId).filter((ex) => picks.includes(ex.id)).map((ex) => ({ exId: ex.id, sets: [firstSetFor(ex)] }));
+  let list = dayExercises(dayId).filter((ex) => picks.includes(ex.id));
+  if (dayId !== REHAB.id && isRehabOn()) {
+    const rp = picksFor(REHAB.id);
+    list = list.concat(dayExercises(REHAB.id).filter((ex) => rp.includes(ex.id)));
+  }
+  const entries = list.map((ex) => ({ exId: ex.id, sets: [firstSetFor(ex)] }));
   const d = date || today();
   state.active = { person: state.person, dayId, date: d, entries, noRest: d !== today() };
   state.rest = null;
@@ -286,10 +322,11 @@ function viewWorkout() {
   const day = dayById(w.dayId);
   const doneCount = w.entries.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
   const inWorkout = new Set(w.entries.map((e) => e.exId));
-  const others = dayExercises(w.dayId).filter((ex) => !inWorkout.has(ex.id));
+  const others = dayExercises(w.dayId).concat(w.dayId === REHAB.id ? [] : dayExercises(REHAB.id)).filter((ex) => !inWorkout.has(ex.id));
+  const firstRehab = w.dayId === REHAB.id ? -1 : w.entries.findIndex((e) => getEx(e.exId) && getEx(e.exId).rehab);
   return `
     ${w.editingId ? `<div class="banner">Editing a saved workout. Change anything, then tap Save changes.</div>` : ""}
-    <h1>${day.title}</h1>
+    <h1>${day.title}${firstRehab >= 0 ? " + Rehab" : ""}</h1>
     <div class="row" style="margin-bottom:14px">
       <span class="muted">Date</span>
       <input type="date" value="${w.date}" max="${today()}" data-action="date" class="btn small">
@@ -307,12 +344,13 @@ function viewWorkout() {
       const unit = TYPE_INFO[ex.type].unit;
       let n = 0;
       return `
-      <div class="card">
-        <div class="ex-head"><div class="name">${esc(ex.name)}</div><div class="row"><span class="tag">${ex.reps[0]}–${ex.reps[1]} reps</span>${infoBtn(ex)}</div></div>
+      ${ei === firstRehab ? `<h2 class="rehab-head">Rehab</h2>` : ""}
+      <div class="card ${ex.rehab ? "rehab-ex" : ""}">
+        <div class="ex-head"><div class="name">${esc(ex.name)}</div><div class="row"><span class="tag">${repRange(ex)}${ex.repLabel === "Secs" ? "" : " reps"}${ex.perSide ? " each side" : ""}</span>${infoBtn(ex)}</div></div>
         <div class="setup">${esc(ex.setup)}</div>
         ${lastLine(ex)}
         <table class="sets" style="margin-top:8px">
-          <tr><th></th><th>${unit}</th><th>Reps</th><th></th><th></th></tr>
+          <tr><th></th><th>${unit}</th><th>${ex.repLabel || "Reps"}</th><th></th><th></th></tr>
           ${e.sets.map((s, si) => {
             const pr = s.done && isPR(ex, s, w.editingId);
             const label = s.warmup ? "W" : pr ? "🏆" : ++n;
@@ -439,7 +477,7 @@ function viewProgress(query) {
   const done = new Set();
   mySessions().forEach((s) => s.entries.forEach((e) => done.add(keyOf(e.exId))));
   const q = (query || "").toLowerCase();
-  const items = DAYS.flatMap((d) => dayExercises(d.id).filter((ex) => !ex.sameAs).map((ex) => ({ ex, day: d })))
+  const items = DAYS.concat(REHAB).flatMap((d) => dayExercises(d.id).filter((ex) => !ex.sameAs).map((ex) => ({ ex, day: d })))
     .filter(({ ex }) => !q || ex.name.toLowerCase().includes(q));
   const tried = items.filter(({ ex }) => done.has(ex.id));
   const notYet = items.filter(({ ex }) => !done.has(ex.id));
@@ -546,6 +584,7 @@ function trophyData() {
     const sets = working(e.sets);
     if (!sets.length) return;
     const key = keyOf(e.exId);
+    if ((getEx(key) || {}).rehab) return;
     const t = byKey[key] || (byKey[key] = { key, name: (getEx(key) || {}).name || e.name || key, ex: getEx(key) || { type: "other" }, best: null, e1: null, events: [] });
     const top = topSet(sets);
     if (beats(top, t.best)) {
@@ -595,7 +634,7 @@ function openLogPast() {
   openSheet(`
     <h2 class="sheet-title">Log a past workout</h2>
     <form class="form" onsubmit="return false">
-      <label>Day<select name="dayId">${DAYS.map((d) => `<option value="${d.id}">${d.name} – ${d.title}</option>`).join("")}</select></label>
+      <label>Day<select name="dayId">${DAYS.map((d) => `<option value="${d.id}">${d.name} – ${d.title}</option>`).join("")}<option value="${REHAB.id}">Rehab only</option></select></label>
       <label>Date<input type="date" name="date" value="${addDays(today(), -1)}" max="${today()}"></label>
       <p class="muted small">You'll get that day's ticked exercises. Fill in what you did, tick each set, then save.</p>
       <button type="button" class="btn primary block" data-action="log-past-go">Start logging</button>
@@ -627,7 +666,8 @@ function openInfo(exId) {
   const g = GUIDE[keyOf(exId)] || GENERIC_GUIDE;
   openSheet(`
     <h2 class="sheet-title">${esc(ex.name)}</h2>
-    <div><span class="tag">${TYPE_INFO[ex.type].label}</span><span class="tag">${ex.sets} sets × ${ex.reps[0]}–${ex.reps[1]} reps</span></div>
+    <div><span class="tag">${TYPE_INFO[ex.type].label}</span><span class="tag">${ex.sets} sets × ${repRange(ex)}${ex.repLabel === "Secs" ? "" : " reps"}</span>${ex.perSide ? `<span class="tag">each side</span>` : ""}${ex.rehab ? `<span class="tag">Rehab</span>` : ""}</div>
+    ${ex.rehab ? `<p class="muted small" style="margin-top:10px">From your chiro — follow the reps, range and cues they gave you. Stop if anything hurts.</p>` : ""}
     ${ex.custom ? "" : `<div class="art-wrap">${renderArt(g.art)}<div class="muted small">Start ⇄ finish position</div></div>`}
     ${g.muscles ? `<h3>Works</h3><div class="works">${bodyMap(musclesOf(exId), "info")}<p>${esc(g.muscles)}</p></div>` : ""}
     ${ex.setup ? `<h3>Setup</h3><p>${esc(ex.setup)}</p>` : ""}
@@ -645,7 +685,7 @@ function openCustomForm(dayId, editId) {
     <form class="form" onsubmit="return false">
       <input type="hidden" name="id" value="${editId || ""}">
       <label>Name<input name="name" required maxlength="60" value="${esc(ex.name)}" placeholder="e.g. Smith Machine Squat"></label>
-      <label>Day<select name="dayId">${DAYS.map((d) => `<option value="${d.id}" ${d.id === ex.dayId ? "selected" : ""}>${d.name} – ${d.title}</option>`).join("")}</select></label>
+      <label>Day<select name="dayId">${DAYS.map((d) => `<option value="${d.id}" ${d.id === ex.dayId ? "selected" : ""}>${d.name} – ${d.title}</option>`).join("")}<option value="${REHAB.id}" ${ex.dayId === REHAB.id ? "selected" : ""}>Rehab (add-on)</option></select></label>
       <label>Type<select name="type">${Object.entries(TYPE_INFO).map(([k, v]) => `<option value="${k}" ${k === ex.type ? "selected" : ""}>${v.label}</option>`).join("")}</select></label>
       <div class="row">
         <label class="grow">Sets<input name="sets" type="number" inputmode="numeric" min="1" max="10" value="${ex.sets}"></label>
@@ -663,7 +703,7 @@ function saveCustom(form) {
   const name = f.name.trim();
   if (!name) { alert("Give the exercise a name."); return; }
   const r0 = Math.max(1, Number(f.r0) || 8), r1 = Math.max(r0, Number(f.r1) || r0);
-  const data = { name, dayId: f.dayId, type: f.type, sets: Math.max(1, Number(f.sets) || 3), reps: [r0, r1], setup: f.setup.trim(), custom: true };
+  const data = { name, dayId: f.dayId, type: f.type, sets: Math.max(1, Number(f.sets) || 3), reps: [r0, r1], setup: f.setup.trim(), custom: true, rehab: f.dayId === REHAB.id };
   if (f.id) {
     Object.assign(getEx(f.id), data);
   } else {
@@ -818,6 +858,7 @@ personSelect.addEventListener("change", () => {
       state.sessions = state.sessions.filter((s) => s.person !== gone);
       delete state.body[gone];
       delete state.goals[gone];
+      delete state.rehabOn[gone];
       if (state.active && state.active.person === gone) state.active = null;
       state.person = state.people[0];
     }
@@ -917,6 +958,7 @@ document.addEventListener("change", (ev) => {
     if (!t.checked && i >= 0) picks.splice(i, 1);
     save(); render();
   } else if (a === "date") { state.active.date = t.value && t.value <= today() ? t.value : today(); save(); }
+  else if (a === "rehab-on") { state.rehabOn[state.person] = t.checked; save(); render(); }
   else if (a === "stackmax") { const v = Number(t.value); if (v > 0) { state.stackMax = round(v); save(); } render(); }
   else if (a === "bw-goal") { const v = Number(t.value); if (v > 0) state.goals[state.person] = round(v); else delete state.goals[state.person]; save(); render(); }
   else if (a === "addex" && t.value) {
@@ -955,7 +997,7 @@ function importData(file) {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data.people) || !Array.isArray(data.sessions)) throw new Error("bad file");
       if (!confirm(`Replace everything on this device with the backup (${data.sessions.length} workouts)?`)) return;
-      state = { picks: {}, active: null, custom: [], body: {}, goals: {}, ...data };
+      state = { picks: {}, active: null, custom: [], body: {}, goals: {}, rehabOn: {}, ...data };
       save(); render();
     } catch (e) { alert("That doesn't look like a Garage Gym backup file."); }
   };
