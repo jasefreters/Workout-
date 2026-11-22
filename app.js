@@ -1,7 +1,7 @@
 // Garage Gym — workout tracker. All data is stored in this browser (localStorage).
 
 const STORE_KEY = "garage-gym-v1";
-const APP_VERSION = "13"; // keep in step with the ?v= tags in index.html
+const APP_VERSION = "14"; // keep in step with the ?v= tags in index.html
 const app = document.getElementById("app");
 const personSelect = document.getElementById("person");
 
@@ -441,38 +441,77 @@ function finishWorkout() {
 }
 
 // A year of training at a glance: one square per day, filled if you trained.
+// Workout and rehab days. A workout is any session that isn't rehab-only;
+// a rehab day is any day with a rehab exercise logged.
+const workoutSessions = () => mySessions().filter((s) => s.dayId !== REHAB.id);
+const rehabDates = () => new Set(mySessions().filter((s) => s.entries.some((e) => isRehabId(e.exId))).map((s) => s.date));
+
+// A year of training at a glance: one square per day. Green = workout, blue = rehab, half and half = both.
 function heatmap() {
-  const trained = new Set(mySessions().map((s) => s.date));
+  const trained = new Set(workoutSessions().map((s) => s.date));
+  const rehab = rehabDates();
   const end = today();
   const start = addDays(mondayOf(end), -52 * 7);
   const C = 11, G = 3, top = 14;
   let cells = "", labels = "", d = start, i = 0, lastMonth = "";
   while (d <= end) {
     const col = Math.floor(i / 7), row = i % 7;
-    cells += `<rect class="hm ${trained.has(d) ? "on" : ""}" x="${col * (C + G)}" y="${top + row * (C + G)}" width="${C}" height="${C}" rx="2"><title>${fmtDate(d)}</title></rect>`;
+    const x = col * (C + G), y = top + row * (C + G);
+    const w = trained.has(d), r = rehab.has(d);
+    const tip = `<title>${fmtDate(d)}${w ? " · workout" : ""}${r ? " · rehab" : ""}</title>`;
+    cells += `<rect class="hm ${w ? "on" : r ? "rehab" : ""}" x="${x}" y="${y}" width="${C}" height="${C}" rx="2">${tip}</rect>`;
+    if (w && r) cells += `<path class="hm rehab" d="M${x + C} ${y} v${C} h${-C} z">${tip}</path>`;
     const month = new Date(d + "T00:00").toLocaleDateString(undefined, { month: "short" });
     if (row === 0 && month !== lastMonth) {
-      if (col < 51) labels += `<text class="lbl" x="${col * (C + G)}" y="10">${month}</text>`;
+      if (col < 51) labels += `<text class="lbl" x="${x}" y="10">${month}</text>`;
       lastMonth = month;
     }
     d = addDays(d, 1);
     i++;
   }
   const cols = Math.ceil(i / 7);
-  const yearCount = mySessions().filter((s) => s.date > addDays(end, -365)).length;
-  const monthCount = mySessions().filter((s) => s.date.slice(0, 7) === end.slice(0, 7)).length;
+  const workouts = workoutSessions();
+  const yearCount = workouts.filter((s) => s.date > addDays(end, -365)).length;
+  const monthCount = workouts.filter((s) => s.date.slice(0, 7) === end.slice(0, 7)).length;
   // Weeks in a row with at least one workout (this week counts once you've trained).
-  const weeks = new Set(mySessions().map((s) => mondayOf(s.date)));
+  const weeks = new Set(workouts.map((s) => mondayOf(s.date)));
   let wk = mondayOf(end), streak = 0;
   if (!weeks.has(wk)) wk = addDays(wk, -7);
   while (weeks.has(wk)) { streak++; wk = addDays(wk, -7); }
   return `
     <div class="stats">
-      <div class="stat"><div class="v">${monthCount}</div><div class="k">This month</div></div>
+      <div class="stat"><div class="v">${monthCount}</div><div class="k">Workouts this month</div></div>
       <div class="stat"><div class="v">${yearCount}</div><div class="k">Last 12 months</div></div>
       <div class="stat"><div class="v">${streak}</div><div class="k">Week streak</div></div>
     </div>
-    <div class="card heat"><svg class="heatmap" viewBox="0 0 ${cols * (C + G) - G} ${top + 7 * (C + G) - G}" role="img" aria-label="Days trained in the last year">${labels}${cells}</svg></div>`;
+    <div class="card heat">
+      <svg class="heatmap" viewBox="0 0 ${cols * (C + G) - G} ${top + 7 * (C + G) - G}" role="img" aria-label="Workout and rehab days in the last year">${labels}${cells}</svg>
+      <div class="hm-key"><span><i class="k-work"></i>Workout</span><span><i class="k-rehab"></i>Rehab</span><span><i class="k-both"></i>Both</span></div>
+    </div>`;
+}
+
+function rehabCard() {
+  const days = [...rehabDates()].sort();
+  const end = today();
+  const monthDays = days.filter((d) => d.slice(0, 7) === end.slice(0, 7)).length;
+  const last30 = days.filter((d) => d > addDays(end, -30)).length;
+  const lastDay = days[days.length - 1];
+  const rows = dayExercises(REHAB.id).map((ex) => {
+    const hist = historyFor(keyOf(ex.id));
+    const last = hist[hist.length - 1];
+    const times = hist.filter((h) => h.date > addDays(end, -30)).length;
+    return `<a class="list-item rehab-item" href="#/progress/${ex.id}" style="text-decoration:none">
+      <span>${esc(ex.name)}<br><span class="muted small">${last ? `${times}× in the last 30 days` : "Not done yet"}</span></span>
+      <span class="muted" style="text-align:right">${last ? `${fmtDate(last.date)}<br><span class="small">${daysAgo(last.date)}</span>` : "–"}</span></a>`;
+  }).join("");
+  return `
+    <h2 class="rehab-head">Rehab</h2>
+    <div class="stats">
+      <div class="stat"><div class="v">${monthDays}</div><div class="k">Rehab days this month</div></div>
+      <div class="stat"><div class="v">${last30}</div><div class="k">Last 30 days</div></div>
+      <div class="stat"><div class="v">${lastDay ? daysAgo(lastDay).replace(" days ago", "d ago") : "–"}</div><div class="k">Last rehab</div></div>
+    </div>
+    <div class="card rehab-session">${rows}</div>`;
 }
 
 function bodyCard() {
@@ -519,8 +558,9 @@ function viewProgress(query) {
   };
   return `
     <h1>Progress</h1>
-    <p class="sub">Your training, bodyweight and best lifts.</p>
+    <p class="sub">Your training, rehab, bodyweight and best lifts.</p>
     ${heatmap()}
+    ${rehabCard()}
     ${bodyCard()}
     <h2>Lifts</h2>
     <input class="search" type="search" placeholder="Search exercises" value="${esc(query || "")}" data-action="search">

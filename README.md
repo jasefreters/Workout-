@@ -13,7 +13,7 @@ A simple workout tracker for the home gym (cable functional trainer with two wei
 - **Records**: a 🏆 and a pop-up when you beat your best, and each exercise shows an estimated one-rep max with its own chart.
 - **Stack-aware suggestions**: set your heaviest cable stack setting on the home screen. Once you max it out, the app suggests a harder variation instead of more weight.
 - The **Trophies** tab is a wall of your personal bests with the date each was set, plus a timeline of every record you've broken.
-- The **Progress** tab has a year-long activity map, your workout streak, a bodyweight log with a goal line, and a chart for each exercise.
+- The **Progress** tab has a year-long activity map (green = workout, blue = rehab), a Rehab section showing when each rehab exercise was last done, your workout streak, a bodyweight log with a goal line, and a chart for each exercise.
 - **History** lists every workout. Edit any saved workout, or log one you forgot to record.
 - Tap the **(i)** next to any exercise for an animated illustration, muscles worked, step-by-step instructions and tips.
 - **Add your own exercise** to any day from the bottom of that day's list. Your own exercises can be edited or deleted from their (i) sheet.
