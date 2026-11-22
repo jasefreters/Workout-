@@ -173,9 +173,7 @@ const REHAB = {
       setup: "Small jumps side to side, landing softly with knees bent." },
     { id: "rehab-dead-bug", name: "Dead Bug", type: "bw", reps: [8, 10], sets: 2, perSide: true,
       setup: "On your back, arms up, knees over hips. Lower opposite arm and leg, keeping your lower back down." },
-    { id: "rehab-hip-flexor", name: "Hip Flexor Stretch", type: "bw", reps: [30, 45], repLabel: "Secs", sets: 2, perSide: true,
-      setup: "Half-kneel on the mat, squeeze the back glute and shift your hips forward. Log seconds held." },
-    { id: "rehab-hip-hike", name: "Wall Hip Hike", type: "bw", reps: [10, 15], sets: 2, perSide: true,
-      setup: "Stand side-on to a wall on the outside leg, lift the inside knee and hip to press into the wall." },
+    { id: "rehab-hip-wall", name: "Hip Flexor Stretch & Hike", type: "bw", reps: [8, 10], sets: 2, perSide: true,
+      setup: "Side-on to a wall with your hand on it. Lean in and lower your hip to the wall, hold, then lean back up and hike the opposite leg into the air." },
   ].map((ex) => ({ ...ex, rehab: true })),
 };

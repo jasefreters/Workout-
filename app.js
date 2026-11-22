@@ -1,7 +1,7 @@
 // Garage Gym — workout tracker. All data is stored in this browser (localStorage).
 
 const STORE_KEY = "garage-gym-v1";
-const APP_VERSION = "10"; // keep in step with the ?v= tags in index.html
+const APP_VERSION = "11"; // keep in step with the ?v= tags in index.html
 const app = document.getElementById("app");
 const personSelect = document.getElementById("person");
 
@@ -29,6 +29,12 @@ function load() {
 let state = load();
 // One-off: rest timer default changed to 1 minute.
 if (!state.restV) { state.restSecs = 60; state.restV = 2; }
+// One-off: the hip flexor stretch and wall hike became one exercise; keep it ticked.
+Object.entries(state.picks).forEach(([k, list]) => {
+  if (!list.some((id) => id === "rehab-hip-flexor" || id === "rehab-hip-hike")) return;
+  state.picks[k] = list.filter((id) => id !== "rehab-hip-flexor" && id !== "rehab-hip-hike").concat("rehab-hip-wall");
+  save();
+});
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch (e) { alert("Couldn't save — storage may be full or blocked."); }
